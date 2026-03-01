@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 WATCH_FOLDER = r"C:\Users\abhijith\ascon_demo\img"
 
 # ✅ Receiver laptop IP
-HOST = "192.168.1.20"
+HOST = "Receiver_lap_ip"
 PORT = 5000
 
 # Load receiver RSA public key (copied from laptop)
