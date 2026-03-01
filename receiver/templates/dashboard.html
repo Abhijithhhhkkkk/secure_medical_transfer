@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="dashboard-container">
+
+    <div class="header">
+        <h2>Welcome, {{ user }}</h2>
+        <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+    </div>
+
+    <hr>
+
+    <div class="image-grid">
+        {% for img in images %}
+        <div class="image-card">
+            <img src="{{ url_for('static', filename='images/' + img) }}" width="300">
+            <br><br>
+            <a href="{{ url_for('static', filename='images/' + img) }}" download class="download-btn">Download</a>
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+
+</body>
+</html>
