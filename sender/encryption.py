@@ -8,14 +8,13 @@ from ascon import encrypt  # your ascon package uses encrypt/decrypt
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 
-# ✅ Your folder (you gave this)
+
 WATCH_FOLDER = r"C:\Users\abhijith\ascon_demo\img"
 
-# ✅ Receiver laptop IP
+
 HOST = "Receiver_lap_ip"
 PORT = 5000
 
-# Load receiver RSA public key (copied from laptop)
 with open("receiver_public.pem", "rb") as f:
     public_key = serialization.load_pem_public_key(f.read())
 
