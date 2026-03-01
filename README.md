@@ -35,3 +35,23 @@ Receiver decrypts and verifies authentication tag
 Decrypted image saved to receiver/static/images/
 
 Image visible on Flask dashboard
+
+### Sender — Raspberry Pi
+1. Loads medical image from storage
+2. Converts image into byte array
+3. Generates random session key
+4. Generates nonce
+5. Encrypts image using **ASCON**
+6. Encrypts session key using **RSA public key**
+7. Sends encrypted packet via TCP socket
+
+### Receiver — Laptop Server
+1. Receives encrypted packet
+2. Extracts encrypted session key + ciphertext
+3. Decrypts session key using **RSA private key**
+4. Decrypts image using **ASCON**
+5. Verifies authentication tag
+6. Stores image
+7. Displays image in Flask web interface
+
+---
