@@ -75,23 +75,23 @@ class Handler(FileSystemEventHandler):
         if not path.lower().endswith((".jpg", ".jpeg", ".png")):
             return
 
-        print("📥 New image detected:", path)
+        print(" New image detected:", path)
 
         # Wait for copy to finish
         if not wait_until_file_ready(path):
-            print("⚠️ File not ready (copy still going). Skipping:", path)
+            print(" File not ready (copy still going). Skipping:", path)
             return
 
         try:
             send_image(path)
-            print("✅ Sent:", os.path.basename(path))
+            print("Sent:", os.path.basename(path))
         except Exception as e:
-            print("❌ Send failed:", e)
+            print("Send failed:", e)
 
 if __name__ == "__main__":
     os.makedirs(WATCH_FOLDER, exist_ok=True)
-    print("📡 Watching folder:", WATCH_FOLDER)
-    print(f"➡️ Sending to {HOST}:{PORT}")
+    print(" Watching folder:", WATCH_FOLDER)
+    print(f" Sending to {HOST}:{PORT}")
 
     observer = Observer()
     observer.schedule(Handler(), WATCH_FOLDER, recursive=False)
