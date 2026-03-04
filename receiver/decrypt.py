@@ -27,7 +27,7 @@ with open("receiver_private.pem", "rb") as f:
 HOST = "0.0.0.0"
 PORT = 5000
 
-# ✅ Save decrypted images here
+#  Save decrypted images here
 SAVE_DIR = r"C:\Users\abhijith\medical_data_receiver\static\images"
 os.makedirs(SAVE_DIR, exist_ok=True)
 
@@ -35,9 +35,9 @@ server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 server.bind((HOST, PORT))
 server.listen(5)
-
-print(f"✅ Hybrid Receiver listening on {HOST}:{PORT}")
-print(f"📁 Saving decrypted images to: {SAVE_DIR}")
+p
+print(f"Hybrid Receiver listening on {HOST}:{PORT}")
+print(f"Saving decrypted images to: {SAVE_DIR}")
 
 count = 0
 
@@ -79,16 +79,16 @@ while True:
         plaintext = decrypt(session_key, nonce, b"", ciphertext)
 
         if plaintext is None:
-            print("❌ Authentication failed (tampered/wrong data)")
+            print("Authentication failed (tampered/wrong data)")
         else:
             count += 1
             filename = os.path.join(SAVE_DIR, f"image_{count}_{int(time.time())}.jpg")
             with open(filename, "wb") as f:
                 f.write(plaintext)
-            print("✅ Saved:", filename)
+            print(" Saved:", filename)
 
     except Exception as e:
-        print("❌ Error:", e)
+        print(" Error:", e)
 
     finally:
         conn.close()
