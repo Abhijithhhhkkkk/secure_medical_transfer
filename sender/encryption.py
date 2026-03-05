@@ -1,50 +1,85 @@
 import os
 import time
 import socket
+from pathlib import Path
+
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-from ascon import encrypt  # your ascon package uses encrypt/decrypt
+from ascon import encrypt  # your ascon package
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 
+# ----------------------------
+# CONFIG (Pi)
+# ----------------------------
+WATCH_FOLDER = Path("/home/pi/ascon_demo/img")
 
-WATCH_FOLDER = r"C:\Users\abhijith\ascon_demo\img"
-
-
-HOST = "Receiver_lap_ip"
+# Receiver laptop IP
+HOST = os.getenv("RECEIVER_IP", "192.168.1.98")   # <-- set your laptop IP here
 PORT = 5000
 
-with open("receiver_public.pem", "rb") as f:
+PUBLIC_KEY_PATH = Path("/home/pi/ascon_demo/keys/receiver_public.pem")
+
+SOCKET_TIMEOUT = 10
+
+READY_TIMEOUT = 20
+READY_STABLE_CHECKS = 4
+READY_SLEEP = 0.3
+
+
+# ----------------------------
+# Load RSA public key (receiver's public key)
+# ----------------------------
+with open(PUBLIC_KEY_PATH, "rb") as f:
     public_key = serialization.load_pem_public_key(f.read())
 
-def wait_until_file_ready(path, timeout=15):
-    """Wait until file copy finishes (size stops changing)."""
+
+def wait_until_file_ready(path: Path, timeout=READY_TIMEOUT) -> bool:
+    stable = 0
     last_size = -1
     start = time.time()
+
     while time.time() - start < timeout:
         try:
-            size = os.path.getsize(path)
+            size = path.stat().st_size
         except FileNotFoundError:
             time.sleep(0.2)
             continue
 
-        if size == last_size and size > 0:
-            return True
+        if size > 0 and size == last_size:
+            stable += 1
+            if stable >= READY_STABLE_CHECKS:
+                return True
+        else:
+            stable = 0
+
         last_size = size
-        time.sleep(0.3)
+        time.sleep(READY_SLEEP)
+
     return False
 
-def send_image(path):
-    with open(path, "rb") as f:
-        image_bytes = f.read()
+
+def send_image(path: Path) -> None:
+    image_bytes = path.read_bytes()
+
+    # Metadata
+    filename = path.name.encode("utf-8", errors="replace")
+    if len(filename) > 500:
+        filename = filename[:500]  # keep header small
+
+    ts = int(time.time())
+    packet_id = os.urandom(16)
 
     # Hybrid: new ASCON key per image
     ascon_key = os.urandom(16)
     nonce = os.urandom(16)
 
+    # AAD (must match receiver)
+    aad = len(filename).to_bytes(2, "big") + filename + ts.to_bytes(8, "big") + packet_id
+
     # ASCON encrypt image
-    ciphertext = encrypt(ascon_key, nonce, b"", image_bytes)
+    ciphertext = encrypt(ascon_key, nonce, aad, image_bytes)
 
     # RSA encrypt ASCON key (OAEP)
     rsa_ct = public_key.encrypt(
@@ -56,45 +91,63 @@ def send_image(path):
         ),
     )
 
-    # Packet:
-    # [2 bytes rsa_ct_len] + [rsa_ct] + [nonce] + [ciphertext+tag]
-    packet = len(rsa_ct).to_bytes(2, "big") + rsa_ct + nonce + ciphertext
+    if len(rsa_ct) > 65535:
+        raise ValueError("RSA ciphertext too long to fit in 2 bytes length field.")
 
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.connect((HOST, PORT))
-    client.sendall(len(packet).to_bytes(8, "big"))
-    client.sendall(packet)
-    client.close()
+    # Packet format:
+    # [2 bytes rsa_len] [rsa_ct] [16 nonce] [2 name_len] [name bytes] [8 timestamp] [16 packet_id] [ciphertext+tag]
+    packet = (
+        len(rsa_ct).to_bytes(2, "big")
+        + rsa_ct
+        + nonce
+        + len(filename).to_bytes(2, "big")
+        + filename
+        + ts.to_bytes(8, "big")
+        + packet_id
+        + ciphertext
+    )
+
+    # Send with total length prefix (8 bytes)
+    with socket.create_connection((HOST, PORT), timeout=SOCKET_TIMEOUT) as client:
+        client.sendall(len(packet).to_bytes(8, "big"))
+        client.sendall(packet)
+
 
 class Handler(FileSystemEventHandler):
     def on_created(self, event):
         if event.is_directory:
             return
 
-        path = event.src_path
-        if not path.lower().endswith((".jpg", ".jpeg", ".png")):
+        path = Path(event.src_path)
+
+        # Ignore temp/partial files
+        if path.name.startswith(".") or path.suffix.lower() in [".part", ".tmp", ".crdownload"]:
             return
 
-        print(" New image detected:", path)
+        if path.suffix.lower() not in [".jpg", ".jpeg", ".png"]:
+            return
 
-        # Wait for copy to finish
+        print(f"📷 New image detected: {path}")
+
         if not wait_until_file_ready(path):
-            print(" File not ready (copy still going). Skipping:", path)
+            print(f"File not ready. Skipping: {path}")
             return
 
         try:
             send_image(path)
-            print("Sent:", os.path.basename(path))
+            print(f"Sent: {path.name}")
         except Exception as e:
-            print("Send failed:", e)
+            print(f"Send failed: {e}")
 
-if __name__ == "__main__":
-    os.makedirs(WATCH_FOLDER, exist_ok=True)
-    print(" Watching folder:", WATCH_FOLDER)
-    print(f" Sending to {HOST}:{PORT}")
+
+def main():
+    WATCH_FOLDER.mkdir(parents=True, exist_ok=True)
+    print(f"Watching folder: {WATCH_FOLDER}")
+    print(f"Sending to {HOST}:{PORT}")
+    print(f" Using public key: {PUBLIC_KEY_PATH}")
 
     observer = Observer()
-    observer.schedule(Handler(), WATCH_FOLDER, recursive=False)
+    observer.schedule(Handler(), str(WATCH_FOLDER), recursive=False)
     observer.start()
 
     try:
@@ -102,4 +155,9 @@ if __name__ == "__main__":
             time.sleep(1)
     except KeyboardInterrupt:
         observer.stop()
+
     observer.join()
+
+
+if __name__ == "__main__":
+    main()
